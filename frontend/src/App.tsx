@@ -7,6 +7,9 @@ import InvestmentForm from './components/InvestmentForm'
 import Cadastros from './components/Cadastros'
 import UserManagement from './components/UserManagement'
 import Invite from './components/Invite'
+import Integrations from './components/Integrations'
+import Importacao from './components/Importacao'
+import Consulta from './components/Consulta'
 
 // Configuração do Supabase - você vai preencher isso
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co'
@@ -54,7 +57,7 @@ function App() {
         />
         <Route
           path="/novo-investimento"
-          element={session ? <InvestmentForm session={session} /> : <Navigate to="/login" />}
+          element={session ? <InvestmentForm session={session} onClose={() => window.history.back()} /> : <Navigate to="/login" />}
         />
         <Route
           path="/cadastros"
@@ -63,6 +66,18 @@ function App() {
         <Route
           path="/usuarios"
           element={session ? <UserManagement session={session} onClose={() => window.history.back()} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/integracoes"
+          element={session ? <Integrations session={session} onClose={() => window.history.back()} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/importacao"
+          element={session ? <Importacao session={session} onClose={() => window.history.back()} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/consulta"
+          element={session ? <Consulta session={session} onClose={() => window.history.back()} /> : <Navigate to="/login" />}
         />
         <Route
           path="/convite"

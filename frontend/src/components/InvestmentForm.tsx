@@ -1,10 +1,20 @@
 import { useState, useEffect } from 'react'
 import { Session } from '@supabase/supabase-js'
 import { supabase } from '../App'
-import { X, Check, Edit2, Save } from 'lucide-react'
+import TopNavBar from './layout/TopNavBar'
+import { Check, Save, Search } from 'lucide-react'
+
+interface Fornecedor {
+  id: string
+  nome: string
+  email: string | null
+  telefone: string | null
+  categoria: string | null
+}
 
 interface Investimento {
   id: string
+  evento_id: string | null
   tipo_fornecedor: string
   nome_fornecedor: string
   descricao_despesa: string
@@ -24,6 +34,13 @@ interface Investimento {
   mes_referencia: string
   observacoes: string
   status: 'PENDENTE' | 'RECEBIDO' | 'APROVADO' | 'PAGO'
+}
+
+interface Evento {
+  id: string
+  nome: string
+  tipo: string
+  subevento: string
 }
 
 interface InvestmentFormProps {
@@ -151,23 +168,29 @@ function CurrencyInput({ name, value, onChange, required, placeholder }: {
   }
 
   return (
-    <input
-      type="text"
-      name={name}
-      value={displayValue}
-      onChange={handleChange}
-      onBlur={handleBlur}
-      required={required}
-      placeholder={placeholder || "0,00"}
-      className="currency-input"
-      inputMode="decimal"
-    />
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">R$</span>
+      <input
+        type="text"
+        name={name}
+        value={displayValue}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        required={required}
+        placeholder={placeholder || "0,00"}
+        className="w-full pl-8 pr-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+        inputMode="decimal"
+      />
+    </div>
   )
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
 export default function InvestmentForm({ session, onClose, investimento }: InvestmentFormProps) {
+  const [eventos, setEventos] = useState<Evento[]>([])
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
+  const [fornecedorBusca, setFornecedorBusca] = useState('')
+  const [fornecedoresFiltrados, setFornecedoresFiltrados] = useState<Fornecedor[]>([])
+  const [showFornecedorDropdown, setShowFornecedorDropdown] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -199,7 +222,31 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
     setFormData(prev => ({ ...prev, datas_pagamento: datasStr }))
   }
 
+  // Buscar eventos e fornecedores ao carregar o formulário
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data: eventosData } = await supabase
+        .from('eventos')
+        .select('*')
+        .eq('status', 'ativo')
+        .order('nome')
+      if (eventosData) setEventos(eventosData)
+
+      const { data: fornecedoresData } = await supabase
+        .from('fornecedores')
+        .select('*')
+        .eq('status', 'ativo')
+        .order('nome')
+      if (fornecedoresData) {
+        setFornecedores(fornecedoresData)
+        setFornecedoresFiltrados(fornecedoresData)
+      }
+    }
+    fetchData()
+  }, [])
+
   const [formData, setFormData] = useState({
+    evento_id: '',
     tipo_fornecedor: '',
     nome_fornecedor: '',
     descricao_despesa: '',
@@ -228,6 +275,7 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
         setParcelas(investimento.datas_pagamento)
       }
       setFormData({
+        evento_id: investimento.evento_id || '',
         tipo_fornecedor: investimento.tipo_fornecedor || '',
         nome_fornecedor: investimento.nome_fornecedor || '',
         descricao_despesa: investimento.descricao_despesa || '',
@@ -253,6 +301,32 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+
+    // Filtrar fornecedores quando digitar
+    if (name === 'nome_fornecedor') {
+      setFornecedorBusca(value)
+      if (value.length > 0) {
+        const filtrados = fornecedores.filter(f =>
+          f.nome.toLowerCase().includes(value.toLowerCase()) ||
+          f.categoria?.toLowerCase().includes(value.toLowerCase())
+        )
+        setFornecedoresFiltrados(filtrados)
+        setShowFornecedorDropdown(true)
+      } else {
+        setFornecedoresFiltrados(fornecedores)
+        setShowFornecedorDropdown(false)
+      }
+    }
+  }
+
+  const handleSelectFornecedor = (fornecedor: Fornecedor) => {
+    setFormData(prev => ({
+      ...prev,
+      nome_fornecedor: fornecedor.nome,
+      tipo_fornecedor: fornecedor.categoria || prev.tipo_fornecedor
+    }))
+    setShowFornecedorDropdown(false)
+    setFornecedorBusca('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -262,6 +336,7 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
 
     try {
       const investimentoData = {
+        evento_id: formData.evento_id || null,
         tipo_fornecedor: formData.tipo_fornecedor,
         nome_fornecedor: formData.nome_fornecedor,
         descricao_despesa: formData.descricao_despesa,
@@ -301,30 +376,6 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
 
       if (error) throw error
 
-      // Notificar no Slack
-      if (!isEditing) {
-        try {
-          await fetch(`${API_URL}/slack/notificar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ investimento: investimentoData })
-          })
-        } catch {}
-      }
-
-      // Sincronizar com Google Sheets
-      try {
-        const res = await fetch(`${API_URL}/sheets/atualizar`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ force: true })
-        })
-        const sheetData = await res.json()
-        console.log('Sheets sincronizado:', sheetData)
-      } catch (sheetErr) {
-        console.warn('Erro ao sincronizar Sheets:', sheetErr)
-      }
-
       setSuccess(true)
       setTimeout(() => onClose(), 1500)
     } catch (err: any) {
@@ -336,193 +387,438 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
 
   if (success) {
     return (
-      <div className="modal-overlay">
-        <div className="modal-content p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Check className="w-8 h-8 text-green-600" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 text-center shadow-2xl max-w-sm mx-4 animate-scale-in">
+          <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
           </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
             {isEditing ? 'Investimento Atualizado!' : 'Investimento Salvo!'}
           </h2>
-          <p className="text-gray-500">Redirecionando...</p>
+          <p className="text-gray-500 dark:text-slate-400">Redirecionando...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-800">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+      <TopNavBar session={session} currentPage="cadastros" />
+
+      <main className="pt-20 pb-8 px-4 md:px-6 lg:px-8 max-w-6xl mx-auto">
+        {/* Breadcrumb Header */}
+        <div className="mb-6">
+          <nav className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-2">
+            <button onClick={onClose} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+            </button>
+            <span className="material-symbols-outlined text-sm">chevron_right</span>
+            <span>Cadastros</span>
+            <span className="material-symbols-outlined text-sm">chevron_right</span>
+            <span className="text-gray-800 dark:text-white font-medium">Novo Investimento</span>
+          </nav>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white font-headline">
             {isEditing ? 'Editar Investimento' : 'Novo Investimento'}
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+          </h1>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-section">
-            <h3>Identificação</h3>
-            <div className="form-group">
-              <label>Tipo de Fornecedor *</label>
-              <select name="tipo_fornecedor" value={formData.tipo_fornecedor} onChange={handleChange} required>
-                <option value="">Selecione...</option>
-                {TIPOS_FORNECEDOR.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Card: Evento & Identificação - Asymmetric Grid 1/3 + 2/3 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Evento Section */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">event</span>
+                <h3 className="font-semibold text-gray-800 dark:text-white">Evento</h3>
+              </div>
+              <div className="form-group">
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Evento *</label>
+                <select
+                  name="evento_id"
+                  value={formData.evento_id}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                >
+                  <option value="">Selecione o evento...</option>
+                  {eventos.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                </select>
+              </div>
             </div>
-            <div className="form-group">
-              <label>Nome do Fornecedor *</label>
-              <input type="text" name="nome_fornecedor" value={formData.nome_fornecedor} onChange={handleChange} required placeholder="Ex: Espaço Altus Eventos" />
-            </div>
-            <div className="form-group">
-              <label>Descrição da Despesa *</label>
-              <textarea name="descricao_despesa" value={formData.descricao_despesa} onChange={handleChange} required rows={2} />
+
+            {/* Identificação Section */}
+            <div className="md:col-span-2 bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">badge</span>
+                <h3 className="font-semibold text-gray-800 dark:text-white">Identificação</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Tipo de Fornecedor *</label>
+                  <select
+                    name="tipo_fornecedor"
+                    value={formData.tipo_fornecedor}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  >
+                    <option value="">Selecione...</option>
+                    {TIPOS_FORNECEDOR.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+
+                <div className="form-group relative">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Fornecedor *</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="nome_fornecedor"
+                      value={formData.nome_fornecedor}
+                      onChange={handleChange}
+                      onFocus={() => setShowFornecedorDropdown(true)}
+                      required
+                      placeholder="Buscar fornecedor..."
+                      autoComplete="off"
+                      className="w-full px-3 py-2.5 pr-10 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                    <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  </div>
+
+                  {/* Dropdown de fornecedores */}
+                  {showFornecedorDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg max-h-48 overflow-y-auto z-50">
+                      {fornecedoresFiltrados.length > 0 ? (
+                        fornecedoresFiltrados.map(fornecedor => (
+                          <button
+                            key={fornecedor.id}
+                            type="button"
+                            onClick={() => handleSelectFornecedor(fornecedor)}
+                            className="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-600 border-b border-slate-100 dark:border-slate-600 last:border-b-0 transition-colors"
+                          >
+                            <div className="font-medium text-gray-800 dark:text-white">{fornecedor.nome}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              {fornecedor.email && <span>{fornecedor.email}</span>}
+                              {fornecedor.email && fornecedor.telefone && <span> • </span>}
+                              {fornecedor.telefone && <span>{fornecedor.telefone}</span>}
+                            </div>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-center text-slate-500 dark:text-slate-400 text-sm">
+                          Nenhum fornecedor encontrado
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="form-section">
-            <h3>Informações Financeiras</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="form-group">
-                <label>Valor Orçado (R$) *</label>
+          {/* Card: Descrição */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">description</span>
+              <h3 className="font-semibold text-gray-800 dark:text-white">Descrição</h3>
+            </div>
+            <div className="form-group">
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Descrição da Despesa *</label>
+              <textarea
+                name="descricao_despesa"
+                value={formData.descricao_despesa}
+                onChange={handleChange}
+                required
+                rows={3}
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                placeholder="Descreva os detalhes da despesa..."
+              />
+            </div>
+          </div>
+
+          {/* Card: Informações Financeiras - Grid 4/4/4/8/4 */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">payments</span>
+              <h3 className="font-semibold text-gray-800 dark:text-white">Informações Financeiras</h3>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {/* Valor Orçado - 4 col */}
+              <div className="col-span-2 md:col-span-2 form-group">
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Valor Orçado (R$) *</label>
                 <CurrencyInput
                   name="valor_orcado"
                   value={formData.valor_orcado.toString()}
                   onChange={handleChange}
                   required
-                  placeholder="R$ 0,00"
+                  placeholder="0,00"
                 />
               </div>
-              <div className="form-group">
-                <label>Valor Realizado (R$) *</label>
+
+              {/* Valor Realizado - 4 col */}
+              <div className="col-span-2 md:col-span-2 form-group">
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Valor Realizado (R$) *</label>
                 <CurrencyInput
                   name="valor_realizado"
                   value={formData.valor_realizado.toString()}
                   onChange={handleChange}
                   required
-                  placeholder="R$ 0,00"
+                  placeholder="0,00"
+                />
+              </div>
+
+              {/* Quantidade - 4 col */}
+              <div className="col-span-1 form-group">
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Qtd</label>
+                <input
+                  type="number"
+                  name="quantidade"
+                  value={formData.quantidade}
+                  onChange={handleChange}
+                  min="1"
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                />
+              </div>
+
+              {/* Forma de Pagamento - 8 col (input chips) */}
+              <div className="col-span-2 md:col-span-4 form-group">
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Forma de Pagamento *</label>
+                <div className="flex flex-wrap gap-2">
+                  {FORMAS_PAGAMENTO.map(forma => (
+                    <button
+                      key={forma.value}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, forma_pagamento: forma.value }))}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                        formData.forma_pagamento === forma.value
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      {forma.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Parcelas - 4 col */}
+              <div className="col-span-1 form-group">
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Parcelas</label>
+                <input
+                  type="number"
+                  name="numero_parcelas"
+                  value={formData.numero_parcelas}
+                  onChange={handleChange}
+                  min="1"
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="form-group">
-                <label>Quantidade</label>
-                <input type="number" name="quantidade" value={formData.quantidade} onChange={handleChange} min="1" />
-              </div>
-              <div className="form-group">
-                <label>Forma de Pagamento *</label>
-                <select name="forma_pagamento" value={formData.forma_pagamento} onChange={handleChange} required>
-                  <option value="">Selecione...</option>
-                  {FORMAS_PAGAMENTO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Parcelas</label>
-                <input type="number" name="numero_parcelas" value={formData.numero_parcelas} onChange={handleChange} min="1" />
-              </div>
-            </div>
           </div>
 
-          <div className="form-section">
-            <h3>Prazos e Documentos</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="form-group">
-                <label>Data de Vencimento *</label>
-                <input type="date" name="data_vencimento" value={formData.data_vencimento} onChange={handleChange} required />
+          {/* Card: Prazos e Documentos - 2 columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">schedule</span>
+                <h3 className="font-semibold text-gray-800 dark:text-white">Prazos</h3>
               </div>
-              <div className="form-group">
-                <label>Número da Nota Fiscal</label>
-                <input type="text" name="numero_nota_fiscal" value={formData.numero_nota_fiscal} onChange={handleChange} placeholder="NF-2026-001" />
-              </div>
-            </div>
 
-            {/* Parcelas */}
-            <div className="form-group" style={{marginTop: '1rem'}}>
-              <label>Datas de Parcelas (uma por linha)</label>
-              {parcelas.map((data, index) => (
-                <div key={index} className="parcela-row">
-                  <span className="parcela-num">{index + 1}ª parcela</span>
+              <div className="space-y-4">
+                <div className="form-group">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Data de Vencimento *</label>
                   <input
                     type="date"
-                    value={data}
-                    onChange={(e) => updateParcela(index, e.target.value)}
-                    className="parcela-input"
+                    name="data_vencimento"
+                    value={formData.data_vencimento}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
-                  <button
-                    type="button"
-                    onClick={() => removeParcela(index)}
-                    className="btn-remove-parcela"
-                  >
-                    ×
-                  </button>
                 </div>
-              ))}
-              <button type="button" onClick={addParcela} className="btn-add-parcela">
-                + Adicionar Parcela
-              </button>
-            </div>
-          </div>
 
-          <div className="form-section">
-            <h3>Responsabilidades</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="form-group">
-                <label>Responsável *</label>
-                <select name="responsavel" value={formData.responsavel} onChange={handleChange} required>
-                  <option value="">Selecione...</option>
-                  {RESPONSAVEIS.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+                {/* Parcelas */}
+                <div className="form-group">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Datas de Parcelas</label>
+                  <div className="space-y-2">
+                    {parcelas.map((data, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 w-16">{index + 1}ª parcela</span>
+                        <input
+                          type="date"
+                          value={data}
+                          onChange={(e) => updateParcela(index, e.target.value)}
+                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-gray-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeParcela(index)}
+                          className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-lg">close</span>
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addParcela}
+                      className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-lg">add</span>
+                      Adicionar Parcela
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Mês de Referência *</label>
-                <select name="mes_referencia" value={formData.mes_referencia} onChange={handleChange} required>
-                  <option value="">Selecione...</option>
-                  {MESES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </select>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">receipt_long</span>
+                <h3 className="font-semibold text-gray-800 dark:text-white">Documentos</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="form-group">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Número da Nota Fiscal</label>
+                  <input
+                    type="text"
+                    name="numero_nota_fiscal"
+                    value={formData.numero_nota_fiscal}
+                    onChange={handleChange}
+                    placeholder="NF-2026-001"
+                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="possui_boleto_nf"
+                      checked={formData.possui_boleto_nf === 'true'}
+                      onChange={(e) => setFormData(prev => ({ ...prev, possui_boleto_nf: e.target.checked ? 'true' : 'false' }))}
+                      className="w-5 h-5 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-slate-600 dark:text-slate-300">Possui boleto/NF anexado</span>
+                  </label>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="form-section">
-            <h3>Observações</h3>
-            <div className="form-group">
-              <label>Status Inicial</label>
-              <select name="status" value={formData.status} onChange={handleChange}>
-                <option value="PENDENTE">Pendente</option>
-                <option value="RECEBIDO">Recebido</option>
-                <option value="APROVADO">Aprovado</option>
-                <option value="PAGO">Pago</option>
-              </select>
+          {/* Card: Responsabilidades & Observações - 2 columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">person</span>
+                <h3 className="font-semibold text-gray-800 dark:text-white">Responsabilidades</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="form-group">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Responsável *</label>
+                  <select
+                    name="responsavel"
+                    value={formData.responsavel}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  >
+                    <option value="">Selecione...</option>
+                    {RESPONSAVEIS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mês de Referência *</label>
+                  <select
+                    name="mes_referencia"
+                    value={formData.mes_referencia}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  >
+                    <option value="">Selecione...</option>
+                    {MESES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                </div>
+              </div>
             </div>
-            <div className="form-group">
-              <label>Observações</label>
-              <textarea name="observacoes" value={formData.observacoes} onChange={handleChange} rows={2} />
+
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">info</span>
+                <h3 className="font-semibold text-gray-800 dark:text-white">Status & Observações</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="form-group">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Status Inicial</label>
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  >
+                    <option value="PENDENTE">Pendente</option>
+                    <option value="RECEBIDO">Recebido</option>
+                    <option value="APROVADO">Aprovado</option>
+                    <option value="PAGO">Pago</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Observações</label>
+                  <textarea
+                    name="observacoes"
+                    value={formData.observacoes}
+                    onChange={handleChange}
+                    rows={2}
+                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                    placeholder="Observações adicionais..."
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex gap-4">
-            <button type="button" onClick={onClose} className="btn-cancel flex-1">Cancelar</button>
-            <button type="submit" disabled={loading} className="btn-submit flex-1">
+          {/* Action Buttons */}
+          <div className="flex gap-4 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-6 py-3 primary-gradient text-white font-medium rounded-xl shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
               {loading ? (
-                'Salvando...'
+                <span className="flex items-center gap-2">
+                  <span className="material-symbols-outlined animate-spin">sync</span>
+                  Salvando...
+                </span>
               ) : (
                 <>
-                  <Save size={16} />
+                  <Save size={18} />
                   {isEditing ? 'Atualizar Investimento' : 'Salvar Investimento'}
                 </>
               )}
             </button>
           </div>
         </form>
-      </div>
+      </main>
     </div>
   )
 }
