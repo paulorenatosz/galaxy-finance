@@ -44,8 +44,8 @@ export default function Login() {
                 <Rocket size={32} />
               </div>
               <div className="logo-text-wrapper">
-                <h1>Galaxy Finance</h1>
-                <p>Controle Financeiro - Imersão Galaxy</p>
+                <h1>SolarZ Finance</h1>
+                <p>Controle de Investimentos - Eventos Marketing</p>
               </div>
             </div>
           </div>
@@ -103,7 +103,7 @@ export default function Login() {
 
         {/* Footer */}
         <div className="login-footer">
-          <p>Plataforma desenvolvida para Imersão Galaxy</p>
+          <p>Plataforma desenvolvida para SolarZ Marketing</p>
         </div>
       </div>
     </div>

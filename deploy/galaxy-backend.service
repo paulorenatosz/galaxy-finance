@@ -1,0 +1,19 @@
+[Unit]
+Description=SolarZ Finance Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/galaxy-finance/backend
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/usr/local/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+Restart=always
+RestartSec=10
+
+# Váriáveis de ambiente (carregadas do arquivo)
+EnvironmentFile=/var/www/galaxy-finance/backend/.env
+
+[Install]
+WantedBy=multi-user.target

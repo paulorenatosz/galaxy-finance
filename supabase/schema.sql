@@ -1,4 +1,4 @@
--- Schema do Banco de Dados - Galaxy Finance
+-- Schema do Banco de Dados - SolarZ Finance
 -- Execute isso no editor SQL do Supabase
 
 -- Tabela principal de investimentos

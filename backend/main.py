@@ -1,5 +1,5 @@
 """
-Galaxy Finance Backend - Com Google Calendar e Sheets
+SolarZ Finance Backend - Com Google Calendar e Sheets
 """
 
 import os
@@ -18,7 +18,7 @@ import httpx
 # Carregar variáveis de ambiente
 load_dotenv()
 
-app = FastAPI(title="Galaxy Finance API")
+app = FastAPI(title="SolarZ Finance API")
 
 # CORS
 app.add_middleware(
@@ -107,7 +107,7 @@ def revoke_google_tokens():
 async def root():
     tokens = get_google_tokens()
     return {
-        "message": "Galaxy Finance API",
+        "message": "SolarZ Finance API",
         "version": "2.0.0",
         "slack": "configurado" if slack_client else "não configurado",
         "google": "conectado" if tokens else "não conectado",
@@ -230,7 +230,7 @@ async def test_slack():
     try:
         response = slack_client.chat_postMessage(
             channel=SLACK_CHANNEL,
-            text="✅ Galaxy Finance Bot conectado com sucesso!"
+            text="✅ SolarZ Finance Bot conectado com sucesso!"
         )
         return {"status": "ok", "message": "Mensagem enviada!"}
     except SlackApiError as e:
@@ -518,7 +518,7 @@ async def atualizar_planilha(request: Request):
 
         # Se não existe, criar nova planilha
         spreadsheet = {
-            "properties": {"title": "Galaxy Finance - Investimentos"},
+            "properties": {"title": "SolarZ Finance - Investimentos"},
             "sheets": [{"properties": {"title": "Investimentos"}}]
         }
 
@@ -988,16 +988,16 @@ async def create_invite(request: Request):
         # Enviar email com convite
         email_data = {
             "to": email,
-            "subject": f"Convite para Galaxy Finance - {nome}",
+            "subject": f"Convite para SolarZ Finance - {nome}",
             "html": f"""
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <div style="background: linear-gradient(135deg, #0066CC, #0052A3); padding: 20px; text-align: center;">
-                    <h1 style="color: white; margin: 0;">Galaxy Finance</h1>
-                    <p style="color: white; margin: 5px 0 0 0;">Controle Financeiro - Imersão Galaxy</p>
+                    <h1 style="color: white; margin: 0;">SolarZ Finance</h1>
+                    <p style="color: white; margin: 5px 0 0 0;">Controle de Investimentos - SolarZ Marketing</p>
                 </div>
                 <div style="padding: 30px; background: #f5f5f5;">
                     <h2 style="color: #333;">Olá, {nome}!</h2>
-                    <p style="color: #666;">Você foi convidado para participar da plataforma <strong>Galaxy Finance</strong>.</p>
+                    <p style="color: #666;">Você foi convidado para participar da plataforma <strong>SolarZ Finance</strong>.</p>
                     <p style="color: #666;"><strong>Seu perfil:</strong> {role}</p>
                     <div style="text-align: center; margin: 30px 0;">
                         <a href="{invite_link}" style="background: #0066CC; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">ACESSE AQUI</a>

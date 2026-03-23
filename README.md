@@ -1,6 +1,6 @@
-# Galaxy Finance - Plataforma de Controle Financeiro
+# SolarZ Finance - Plataforma de Controle de Investimentos
 
-Plataforma completa de controle financeiro para o evento **Imersão Galaxy** com dashboard em tempo real, notificações e integrações.
+Plataforma completa de controle de investimentos para eventos de marketing com dashboard em tempo real, notificações e integrações.
 
 ## 📱 Funcionalidades
 
@@ -9,7 +9,7 @@ Plataforma completa de controle financeiro para o evento **Imersão Galaxy** com
 - ✅ Indicadores financeiros (Total orçado, realizado, pago, pendente)
 - ✅ Tabela de investimentos com filtros
 - ✅ Atualização de status inline
-- ✅ Tema escuro espacial "Galaxy"
+- ✅ Tema SolarZ profissional
 
 ### Formulário de Entrada
 - ✅ Todos os campos do Google Forms original
@@ -123,10 +123,9 @@ uvicorn main:app --reload --port 8000
 
 ## 🎨 Tema Visual
 
-O dashboard usa um tema espacial "Galaxy" com:
-- Gradientes roxo/azul
-- Efeitos de glow
-- Animações de stars
+O dashboard usa o tema SolarZ com:
+- Gradientes azul professional
+- Design moderno Material Design 3
 - Cores por status e categoria
 
 ---
@@ -134,21 +133,38 @@ O dashboard usa um tema espacial "Galaxy" com:
 ## 📁 Estrutura do Projeto
 
 ```
-galaxy-finance/
+solarz-finance/
 ├── frontend/           # React + TypeScript + Tailwind
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── Dashboard.tsx
 │   │   │   ├── Login.tsx
-│   │   │   └── InvestmentForm.tsx
+│   │   │   ├── InvestmentForm.tsx
+│   │   │   ├── Importacao.tsx
+│   │   │   ├── Cadastros.tsx
+│   │   │   ├── Consulta.tsx
+│   │   │   ├── Integrations.tsx
+│   │   │   └── layout/
+│   │   │       ├── TopNavBar.tsx
+│   │   │       ├── SideNavBar.tsx
+│   │   │       └── BottomNavBar.tsx
 │   │   ├── App.tsx
 │   │   └── main.tsx
-│   └── package.json
+│   └── public/
+│       └── solarz.svg
 ├── backend/           # Python FastAPI
 │   ├── main.py
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── .env
 ├── supabase/
-│   └── schema.sql     # Schema do banco
+│   ├── schema.sql
+│   ├── fornecedores_schema.sql
+│   └── policies.sql
+├── deploy/
+│   ├── nginx.conf
+│   ├── galaxy-backend.service
+│   └── vps-deploy.sh
+├── Dockerfile
 └── README.md
 ```
 
@@ -165,4 +181,4 @@ galaxy-finance/
 
 ---
 
-Feito com ⭐ para Imersão Galaxy
+Feito com ⭐ para SolarZ Marketing
