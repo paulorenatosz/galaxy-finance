@@ -29,8 +29,6 @@ const ROLES = [
   { value: 'usuario', label: 'Usuário', description: 'Acesso básico' },
 ]
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
 export default function UserManagement({ session, onClose }: { session: Session, onClose: () => void }) {
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,10 +56,14 @@ export default function UserManagement({ session, onClose }: { session: Session,
   const loadUsers = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_URL}/users/list`)
-      const data = await res.json()
-      if (data.users) {
-        setUsers(data.users)
+      // Buscar usuários diretamente do Supabase
+      const { data, error } = await supabase
+        .from('perfiles')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (data) {
+        setUsers(data)
       }
     } catch (err) {
       console.error('Erro:', err)
@@ -71,11 +73,8 @@ export default function UserManagement({ session, onClose }: { session: Session,
   }
 
   const loadPermissions = async () => {
-    try {
-      const res = await fetch(`${API_URL}/users/permissions`)
-      const data = await res.json()
-      setPermissions(data.roles)
-    } catch {}
+    // Funcionalidade disponível no Supabase via RLS
+    setPermissions(ROLES.map(r => ({ name: r.value, description: r.label })))
   }
 
   const handleInvite = async () => {
@@ -84,37 +83,20 @@ export default function UserManagement({ session, onClose }: { session: Session,
     setSending(true)
     setMessage(null)
 
-    try {
-      const res = await fetch(`${API_URL}/users/invite`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(inviteData)
-      })
-      const data = await res.json()
-
-      if (data.error) {
-        setMessage({ type: 'error', text: data.error })
-      } else {
-        setInviteLink(data.invite_link)
-        setMessage({ type: 'success', text: 'Convite criado com sucesso!' })
-        setInviteData({ email: '', nome: '', role: 'usuario' })
-      }
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message })
-    } finally {
-      setSending(false)
-    }
+    // Funcionalidade de convite em desenvolvimento
+    setMessage({ type: 'error', text: 'Sistema de convites em desenvolvimento. Use o login Google para acesso.' })
+    setSending(false)
   }
 
   const handleDeactivate = async (userId: string) => {
     if (!confirm('Tem certeza que deseja desativar este usuário?')) return
 
     try {
-      await fetch(`${API_URL}/users/deactivate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId })
-      })
+      // Atualizar status do usuário via Supabase
+      await supabase
+        .from('perfiles')
+        .update({ ativo: false })
+        .eq('id', userId)
       loadUsers()
     } catch (err) {
       console.error('Erro:', err)

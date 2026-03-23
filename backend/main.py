@@ -85,6 +85,22 @@ def get_google_tokens():
         return tokens
     return None
 
+# Revogar acesso Google
+def revoke_google_tokens():
+    tokens = load_tokens()
+    if tokens and 'refresh_token' in tokens:
+        try:
+            # Chamar API de revoke do Google
+            requests.post(
+                'https://oauth2.googleapis.com/revoke',
+                params={'token': tokens['refresh_token']}
+            )
+        except:
+            pass
+    # Remover arquivo de tokens
+    if os.path.exists(TOKEN_FILE):
+        os.remove(TOKEN_FILE)
+
 # ============ ROTAS ============
 
 @app.get("/")
@@ -147,6 +163,12 @@ async def google_status():
     if tokens:
         return {"connected": True}
     return {"connected": False, "authorize_url": get_oauth_url()}
+
+@app.post("/google/revoke")
+async def google_revoke():
+    """Revoga acesso Google"""
+    revoke_google_tokens()
+    return {"status": "ok", "message": "Acesso Google revogado"}
 
 # ============ INVESTIMENTOS ============
 

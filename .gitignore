@@ -42,3 +42,5 @@ ENV/
 
 # Tokens
 google_tokens.json
+
+.vercel
