@@ -1,22 +1,21 @@
-# SolarZ Finance - Guia de Deploy VPS
+# SolarZ Finance - Deploy VPS Debian
 
 ## Visão Geral
 
-Este guia explica como fazer deploy do SolarZ Finance em uma VPS com:
+Deploy completo do SolarZ Finance em VPS Debian 11+:
 - **Frontend**: React (build estático, serve via Nginx)
 - **Backend**: Python FastAPI (roda em porta 8000)
-- **Banco**: Supabase (já configurado na nuvem)
+- **Banco**: Supabase (já na nuvem)
+- **Domínio**: investimentos.solarzmkt.com.br
 
 ---
 
 ## Pré-requisitos
 
-- VPS com Ubuntu 20.04+ ou similar
-- Nginx instalado
-- Python 3.11+
-- Node.js 18+
-- Git
-- Domínio configurado (opcional)
+- VPS com **Debian 11 ou 12**
+- SSH acesso root
+- Domínio `investimentos.solarzmkt.com.br` apontando para o IP da VPS
+- Git, Nginx, Python 3.11+, Node.js 18+
 
 ---
 
@@ -24,7 +23,7 @@ Este guia explica como fazer deploy do SolarZ Finance em uma VPS com:
 
 ### 1.1 Conectar via SSH
 ```bash
-ssh root@IP_DA_SUA_VPS
+ssh root@IP_DA_VPS
 ```
 
 ### 1.2 Atualizar sistema
@@ -37,220 +36,308 @@ apt update && apt upgrade -y
 # Nginx
 apt install -y nginx
 
-# Node.js
+# Node.js 18 (Debian 11)
 curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 apt install -y nodejs
 
-# Python
-apt install -y python3.11 python3.11-venv python3-pip
+# Python 3.11 e venv
+apt install -y python3.11 python3.11-venv python3-pip curl git certbot python3-certbot-nginx
+
+# Ferramentas úteis
+apt install -y vim htop ufw
 ```
 
-### 1.4 Criar usuário para o app (recomendado)
+### 1.4 Criar usuário para o app
 ```bash
-adduser galaxy
-usermod -aG www-data galaxy
+adduser solarz
+usermod -aG sudo solarz
+usermod -aG www-data solarz
+mkdir -p /var/www/solarz-finance
+chown -R solarz:www-data /var/www/solarz-finance
 ```
 
 ---
 
-## Passo 2: Configurar Diretórios
+## Passo 2: Clonar o Repositório
 
 ```bash
-# Criar diretório
-mkdir -p /var/www/galaxy-finance
-chown -R galaxy:www-data /var/www/galaxy-finance
+# Como usuário solarz
+su - solarz
 
 # Clonar o repositório
-cd /var/www/galaxy-finance
+cd /var/www/solarz-finance
 git clone https://github.com/paulorenatosz/galaxy-finance.git .
 
-# Definir permissões
-chmod 755 /var/www/galaxy-finance
+# Volta para root
+exit
 ```
 
 ---
 
 ## Passo 3: Configurar Backend
 
-### 3.1 Criar arquivo .env
+### 3.1 Criar ambiente virtual e instalar dependências
 ```bash
-cd /var/www/galaxy-finance/backend
-nano .env
+cd /var/www/solarz-finance/backend
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+deactivate
+```
+
+### 3.2 Criar arquivo .env
+```bash
+nano /var/www/solarz-finance/backend/.env
 ```
 
 **Conteúdo do .env:**
 ```env
 # Supabase
-SUPABASE_URL=https://udsnfatqoedogawpkgkc.supabase.co
+SUPABASE_URL=https://SEU_PROJETO.supabase.co
 SUPABASE_KEY=SUA_SERVICE_ROLE_KEY_AQUI
 
 # Slack
 SLACK_BOT_TOKEN=xoxb-SEU_TOKEN
 SLACK_CHANNEL=#financeiro
 
-# Google OAuth (use as credenciais do projeto)
-GOOGLE_CLIENT_ID=SEU_CLIENT_ID
+# Google OAuth
+GOOGLE_CLIENT_ID=SEU_CLIENT_ID.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=SEU_CLIENT_SECRET
-GOOGLE_REDIRECT_URI=https://SEU_DOMINIO.com/oauth/callback
-FRONTEND_URL=https://SEU_DOMINIO.com
+GOOGLE_REDIRECT_URI=https://investimentos.solarzmkt.com.br/oauth/callback
+FRONTEND_URL=https://investimentos.solarzmkt.com.br
 
-# CORS (domínios permitidos)
-ALLOWED_ORIGINS=https://SEU_DOMINIO.com,http://IP_DA_VPS:3000
-```
-
-### 3.2 Instalar dependências Python
-```bash
-cd /var/www/galaxy-finance/backend
-pip3 install -r requirements.txt
+# CORS
+ALLOWED_ORIGINS=https://investimentos.solarzmkt.com.br
 ```
 
 ### 3.3 Testar backend
 ```bash
-python3 -m uvicorn main:app --host 127.0.0.1 --port 8000
+source /var/www/solarz-finance/backend/venv/bin/activate
+cd /var/www/solarz-finance/backend
+uvicorn main:app --host 127.0.0.1 --port 8000
 ```
+Verifique em: `curl http://127.0.0.1:8000/docs`
 
-Verifique se está rodando:
-```bash
-curl http://127.0.0.1:8000/docs
-```
+Pressione `Ctrl+C` para parar.
 
 ---
 
-## Passo 4: Configurar como Serviço (SystemD)
+## Passo 4: Configurar Backend como Serviço (SystemD)
 
-### 4.1 Copiar arquivo de serviço
+### 4.1 Criar arquivo de serviço
 ```bash
-cp /var/www/galaxy-finance/deploy/galaxy-backend.service /etc/systemd/system/
+nano /etc/systemd/system/solarz-backend.service
 ```
 
-### 4.2 Recarregar e iniciar
+```ini
+[Unit]
+Description=SolarZ Finance Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=solarz
+WorkingDirectory=/var/www/solarz-finance/backend
+Environment="PATH=/var/www/solarz-finance/backend/venv/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/var/www/solarz-finance/backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+EnvironmentFile=/var/www/solarz-finance/backend/.env
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 4.2 Ativar e iniciar
 ```bash
 systemctl daemon-reload
-systemctl enable galaxy-backend
-systemctl start galaxy-backend
-systemctl status galaxy-backend
+systemctl enable solarz-backend
+systemctl start solarz-backend
+systemctl status solarz-backend
 ```
 
 ### 4.3 Verificar logs
 ```bash
-journalctl -u galaxy-backend -f
+journalctl -u solarz-backend -f
 ```
 
 ---
 
-## Passo 5: Build e Configurar Frontend
+## Passo 5: Build do Frontend
 
-### 5.1 Build do frontend
 ```bash
-cd /var/www/galaxy-finance/frontend
+su - solarz
+cd /var/www/solarz-finance/frontend
 npm install
 npm run build
+exit
 ```
 
-### 5.2 Atualizar URL da API no frontend
-Edite `frontend/src/App.tsx`:
-```typescript
-// Se usando domínio próprio:
-// export const API_URL = 'https://api.seudominio.com'
-
-// Se usando IP:
-// export const API_URL = 'http://IP_DA_VPS:8000'
-```
-
-### 5.3 Rebuild após mudança
+### Configurar .env do frontend (opcional)
 ```bash
+nano /var/www/solarz-finance/frontend/.env
+```
+```env
+VITE_SUPABASE_URL=https://SEU_PROJETO.supabase.co
+VITE_SUPABASE_ANON_KEY=SUA_ANON_KEY_AQUI
+VITE_API_URL=https://investimentos.solarzmkt.com.br
+```
+```bash
+su - solarz
+cd /var/www/solarz-finance/frontend
 npm run build
+exit
 ```
 
 ---
 
 ## Passo 6: Configurar Nginx
 
-### 6.1 Copiar configuração
+### 6.1 Criar configuração do site
 ```bash
-cp /var/www/galaxy-finance/deploy/nginx.conf /etc/nginx/sites-available/galaxy-finance
+nano /etc/nginx/sites-available/solarz-finance
 ```
 
-### 6.2 Editar configuração
-```bash
-nano /etc/nginx/sites-available/galaxy-finance
+```nginx
+server {
+    listen 80;
+    server_name investimentos.solarzmkt.com.br;
+
+    root /var/www/solarz-finance/frontend/dist;
+    index index.html;
+
+    # Cache de arquivos estáticos
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # SPA routing
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy para Backend API
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    access_log /var/log/nginx/solarz-finance-access.log;
+    error_log /var/log/nginx/solarz-finance-error.log;
+}
 ```
 
-**Altere:**
-- `server_name financeiro.seudominio.com;` → seu domínio ou IP
-- `root /var/www/galaxy-finance/frontend/dist;` → caminho correto
-
-### 6.3 Ativar site
+### 6.2 Ativar site
 ```bash
-ln -s /etc/nginx/sites-available/galaxy-finance /etc/nginx/sites-enabled/
+ln -s /etc/nginx/sites-available/solarz-finance /etc/nginx/sites-enabled/
+rm /etc/nginx/sites-enabled/default  # Remove default se existir
 nginx -t
 systemctl reload nginx
 ```
 
 ---
 
-## Passo 7: Configurar Firewall
+## Passo 7: SSL com Let's Encrypt
 
 ```bash
-# Permitir SSH, HTTP, HTTPS
-ufw allow 22/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw enable
+certbot --nginx -d investimentos.solarzmkt.com.br
+```
+Escolha a opção de redirecionar HTTP para HTTPS.
+
+### Verificar renovação automática
+```bash
+systemctl status certbot.timer
 ```
 
 ---
 
-## Passo 8: SSL (Let's Encrypt) - Opcional
+## Passo 8: Firewall (UFW)
 
 ```bash
-# Instalar Certbot
-apt install -y certbot python3-certbot-nginx
-
-# Gerar certificado
-certbot --nginx -d financeiro.seudominio.com
-
-# Auto-renewal (já configurado automaticamente)
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow ssh
+ufw allow http
+ufw allow https
+ufw enable
 ```
 
 ---
 
 ## Passo 9: Deploy Contínuo
 
-### Script de deploy rápido
+Quando houver atualizações no código:
+
 ```bash
-cd /var/www/galaxy-finance
+# SSH na VPS
+ssh solarz@IP_DA_VPS
+
+# Pull e rebuild
+cd /var/www/solarz-finance
 git pull origin master
 
-# Backend
-systemctl restart galaxy-backend
+# Rebuild frontend
+cd frontend && npm install && npm run build && cd ..
 
-# Frontend (rebuild se houver mudanças)
-cd frontend && npm run build
+# Restart backend
+sudo systemctl restart solarz-backend
 
-# Nginx
-nginx -t && systemctl reload nginx
+# Reload nginx
+sudo nginx -t && sudo systemctl reload nginx
+
+exit
+```
+
+Ou use o script automático:
+```bash
+cd /var/www/solarz-finance
+./deploy/vps-deploy.sh
 ```
 
 ---
 
-## Variáveis de Ambiente Necessárias
+## Configuração do Domínio
 
-### Backend (.env)
-| Variável | Descrição | Onde obter |
-|----------|-----------|------------|
-| `SUPABASE_URL` | URL do projeto Supabase | Dashboard Supabase > Settings > API |
-| `SUPABASE_KEY` | Service Role Key | Dashboard Supabase > Settings > API |
-| `SLACK_BOT_TOKEN` | Token do bot Slack | Slack API > OAuth & Permissions |
-| `GOOGLE_CLIENT_ID` | ID do cliente Google | Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | Secret do cliente Google | Google Cloud Console |
+No seu provedor de domínio (registro.br, Cloudflare, etc.):
 
-### Frontend (.env)
-| Variável | Descrição |
-|----------|-----------|
-| `VITE_SUPABASE_URL` | URL do projeto Supabase |
-| `VITE_SUPABASE_ANON_KEY` | Anon Key (pública) |
-| `VITE_API_URL` | URL da API backend |
+| Tipo | Nome | Valor |
+|------|------|-------|
+| A | investimentos | IP_DA_VPS |
+| A | @ | IP_DA_VPS |
+
+Aguarde propagação DNS (~5-30 minutos).
+
+---
+
+## Configuração do Google OAuth
+
+No [Google Cloud Console](https://console.cloud.google.com):
+
+1. Vá em **APIs e Serviços > Credenciais**
+2. Edite o **Client ID OAuth**
+3. Adicione em **URIs de redirect autorizados**:
+   ```
+   https://investimentos.solarzmkt.com.br/oauth/callback
+   ```
+
+---
+
+## Configuração do Supabase
+
+No dashboard do Supabase, adicione `investimentos.solarzmkt.com.br` em:
+- **Authentication > URL Configuration > Site URL**
+- **Authentication > URL Configuration > Redirect URLs**
 
 ---
 
@@ -259,10 +346,15 @@ nginx -t && systemctl reload nginx
 ### Backend não inicia
 ```bash
 # Ver logs
-journalctl -u galaxy-backend -n 50
+journalctl -u solarz-backend -n 50
 
 # Verificar .env
-cat /var/www/galaxy-finance/backend/.env
+cat /var/www/solarz-finance/backend/.env
+
+# Testar manualmente
+source /var/www/solarz-finance/backend/venv/bin/activate
+cd /var/www/solarz-finance/backend
+python -c "from main import app; print('OK')"
 ```
 
 ### Frontend não carrega
@@ -270,35 +362,49 @@ cat /var/www/galaxy-finance/backend/.env
 # Verificar se Nginx está rodando
 systemctl status nginx
 
-# Ver logs Nginx
-tail -f /var/log/nginx/galaxy-finance-error.log
+# Ver logs
+tail -f /var/log/nginx/solarz-finance-error.log
+
+# Verificar arquivos
+ls -la /var/www/solarz-finance/frontend/dist/
+```
+
+### SSL não funciona
+```bash
+# Verificar certificados
+certbot certificates
+
+# Renovar manualmente
+certbot renew --dry-run
 ```
 
 ### CORS errors
-Verifique se as origens estão configuradas corretamente no backend:
-```python
-# main.py
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
+Verifique se `ALLOWED_ORIGINS` no .env do backend inclui:
 ```
+https://investimentos.solarzmkt.com.br
+```
+Depois: `systemctl restart solarz-backend`
 
 ---
 
 ## Estrutura Final
 
 ```
-/var/www/galaxy-finance/
+/var/www/solarz-finance/
 ├── frontend/
-│   ├── dist/          # Build do React (servido pelo Nginx)
+│   ├── dist/          # Build do React
 │   └── src/           # Código fonte
 ├── backend/
 │   ├── main.py        # API FastAPI
-│   ├── .env           # Variáveis de ambiente (NÃO COMMITAR)
+│   ├── .env           # Variáveis (NÃO COMMITAR)
+│   ├── venv/          # Ambiente virtual
 │   └── requirements.txt
 ├── deploy/
 │   ├── nginx.conf
-│   ├── galaxy-backend.service
+│   ├── solarz-backend.service
 │   └── vps-deploy.sh
-└── DEPLOY.md
+├── Dockerfile
+└── README.md
 ```
 
 ---
@@ -306,5 +412,5 @@ ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
 ## Pronto!
 
 Acesse:
-- **Frontend**: http://IP_DA_VPS ou https://seudominio.com
-- **Backend API**: http://IP_DA_VPS:8000/docs
+- **Frontend**: https://investimentos.solarzmkt.com.br
+- **Backend API**: https://investimentos.solarzmkt.com.br/api/docs

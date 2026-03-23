@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================
-# Script de Deploy - SolarZ Finance VPS
+# Script de Deploy - SolarZ Finance VPS (Debian)
 # ============================================
 
 set -e
@@ -12,71 +12,83 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  SolarZ Finance - Deploy VPS${NC}"
+echo -e "${GREEN}  SolarZ Finance - Deploy VPS Debian${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 # ============================================
-# 1. CONFIGURAÇÕES (ALTERE AQUI)
+# CONFIGURAÇÕES
 # ============================================
-APP_NAME="galaxy-finance"
-APP_DIR="/var/www/galaxy-finance"
-BACKEND_PORT=8000
-FRONTEND_PORT=3000
-
-# URLs (configure conforme seu domínio)
-DOMAIN="financeiro.seudominio.com"
-FRONTEND_URL="https://financeiro.seudominio.com"
-API_URL="https://api.financeiro.seudominio.com"
+APP_DIR="/var/www/solarz-finance"
+DOMAIN="investimentos.solarzmkt.com.br"
+BACKEND_SERVICE="solarz-backend"
 
 # ============================================
-# 2. ATUALIZAR CÓDIGO
+# 1. ATUALIZAR CÓDIGO
 # ============================================
-echo -e "\n${YELLOW}[1/6] Atualizando código...${NC}"
+echo -e "\n${YELLOW}[1/5] Atualizando código...${NC}"
 
 cd $APP_DIR
 git pull origin master
 
 # ============================================
-# 3. INSTALAR DEPENDÊNCIAS DO BACKEND
+# 2. INSTALAR DEPENDÊNCIAS DO BACKEND
 # ============================================
-echo -e "\n${YELLOW}[2/6] Instalando backend...${NC}"
+echo -e "\n${YELLOW}[2/5] Instalando dependências do backend...${NC}"
 
 cd $APP_DIR/backend
-pip install -r requirements.txt --quiet
+$APP_DIR/backend/venv/bin/pip install -r requirements.txt -q
 
 # ============================================
-# 4. BUILD DO FRONTEND
+# 3. BUILD DO FRONTEND
 # ============================================
-echo -e "\n${YELLOW}[3/6] Fazendo build do frontend...${NC}"
+echo -e "\n${YELLOW}[3/5] Fazendo build do frontend...${NC}"
 
 cd $APP_DIR/frontend
-npm install
+npm install -q
 npm run build
 
 # ============================================
-# 5. REINICIAR SERVIÇOS
+# 4. REINICIAR SERVIÇOS
 # ============================================
-echo -e "\n${YELLOW}[4/6] Reiniciando serviços...${NC}"
+echo -e "\n${YELLOW}[4/5] Reiniciando serviços...${NC}"
 
 # Reiniciar backend
-sudo systemctl restart galaxy-backend
+sudo systemctl restart $BACKEND_SERVICE
 
-# Rebuild e restart do Nginx
+# Verificar Nginx
 sudo nginx -t && sudo systemctl reload nginx
 
 echo -e "${GREEN}✓ Serviços reiniciados${NC}"
 
 # ============================================
-# 6. VERIFICAR STATUS
+# 5. VERIFICAR STATUS
 # ============================================
-echo -e "\n${YELLOW}[5/6] Verificando status...${NC}"
+echo -e "\n${YELLOW}[5/5] Verificando status...${NC}"
 
-echo -e "\nBackend API:"
-curl -s $API_URL/docs | head -c 100 || echo "Backend não respondendo"
+# Status do backend
+if sudo systemctl is-active --quiet $BACKEND_SERVICE; then
+    echo -e "${GREEN}✓ Backend rodando${NC}"
+else
+    echo -e "${RED}✗ Backend com problema${NC}"
+    sudo systemctl status $BACKEND_SERVICE --no-pager
+fi
 
-echo -e "\nFrontend:"
-curl -s -o /dev/null -w "%{http_code}" $FRONTEND_URL || echo "Frontend não respondendo"
+# Status do Nginx
+if sudo systemctl is-active --quiet nginx; then
+    echo -e "${GREEN}✓ Nginx rodando${NC}"
+else
+    echo -e "${RED}✗ Nginx com problema${NC}"
+fi
+
+# Teste de resposta
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN 2>/dev/null || echo "000")
+if [ "$HTTP_CODE" = "200" ]; then
+    echo -e "${GREEN}✓ Frontend respondendo (HTTP $HTTP_CODE)${NC}"
+else
+    echo -e "${YELLOW}⚠ Frontend respondeu HTTP $HTTP_CODE${NC}"
+fi
 
 echo -e "\n${GREEN}========================================${NC}"
 echo -e "${GREEN}  Deploy concluído!${NC}"
+echo -e "${GREEN}  https://$DOMAIN${NC}"
 echo -e "${GREEN}========================================${NC}"

@@ -1,0 +1,18 @@
+[Unit]
+Description=SolarZ Finance Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=solarz
+WorkingDirectory=/var/www/solarz-finance/backend
+Environment="PATH=/var/www/solarz-finance/backend/venv/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/var/www/solarz-finance/backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+EnvironmentFile=/var/www/solarz-finance/backend/.env
+
+[Install]
+WantedBy=multi-user.target
