@@ -44,3 +44,4 @@ ENV/
 google_tokens.json
 
 .vercel
+.mcp.json
