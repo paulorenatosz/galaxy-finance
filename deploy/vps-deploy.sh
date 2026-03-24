@@ -19,7 +19,7 @@ echo -e "${GREEN}========================================${NC}"
 # CONFIGURAÇÕES
 # ============================================
 APP_DIR="/var/www/solarz-finance"
-DOMAIN="investimentos.solarzmkt.com.br"
+DOMAIN="solarz-eventos.yeixie.easypanel.host"
 BACKEND_SERVICE="solarz-backend"
 
 # ============================================

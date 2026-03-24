@@ -6,7 +6,7 @@ Deploy completo do SolarZ Finance em VPS Debian 11+:
 - **Frontend**: React (build estático, serve via Nginx)
 - **Backend**: Python FastAPI (roda em porta 8000)
 - **Banco**: Supabase (já na nuvem)
-- **Domínio**: investimentos.solarzmkt.com.br
+- **Domínio**: solarz-eventos.yeixie.easypanel.host
 
 ---
 
@@ -14,7 +14,7 @@ Deploy completo do SolarZ Finance em VPS Debian 11+:
 
 - VPS com **Debian 11 ou 12**
 - SSH acesso root
-- Domínio `investimentos.solarzmkt.com.br` apontando para o IP da VPS
+- Domínio `solarz-eventos.yeixie.easypanel.host` apontando para o IP da VPS
 - Git, Nginx, Python 3.11+, Node.js 18+
 
 ---
@@ -104,11 +104,11 @@ SLACK_CHANNEL=#financeiro
 # Google OAuth
 GOOGLE_CLIENT_ID=SEU_CLIENT_ID.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=SEU_CLIENT_SECRET
-GOOGLE_REDIRECT_URI=https://investimentos.solarzmkt.com.br/oauth/callback
-FRONTEND_URL=https://investimentos.solarzmkt.com.br
+GOOGLE_REDIRECT_URI=https://solarz-eventos.yeixie.easypanel.host/oauth/callback
+FRONTEND_URL=https://solarz-eventos.yeixie.easypanel.host
 
 # CORS
-ALLOWED_ORIGINS=https://investimentos.solarzmkt.com.br
+ALLOWED_ORIGINS=https://solarz-eventos.yeixie.easypanel.host
 ```
 
 ### 3.3 Testar backend
@@ -183,7 +183,7 @@ nano /var/www/solarz-finance/frontend/.env
 ```env
 VITE_SUPABASE_URL=https://SEU_PROJETO.supabase.co
 VITE_SUPABASE_ANON_KEY=SUA_ANON_KEY_AQUI
-VITE_API_URL=https://investimentos.solarzmkt.com.br
+VITE_API_URL=https://solarz-eventos.yeixie.easypanel.host
 ```
 ```bash
 su - solarz
@@ -204,7 +204,7 @@ nano /etc/nginx/sites-available/solarz-finance
 ```nginx
 server {
     listen 80;
-    server_name investimentos.solarzmkt.com.br;
+    server_name solarz-eventos.yeixie.easypanel.host;
 
     root /var/www/solarz-finance/frontend/dist;
     index index.html;
@@ -251,7 +251,7 @@ systemctl reload nginx
 ## Passo 7: SSL com Let's Encrypt
 
 ```bash
-certbot --nginx -d investimentos.solarzmkt.com.br
+certbot --nginx -d solarz-eventos.yeixie.easypanel.host
 ```
 Escolha a opção de redirecionar HTTP para HTTPS.
 
@@ -328,14 +328,14 @@ No [Google Cloud Console](https://console.cloud.google.com):
 2. Edite o **Client ID OAuth**
 3. Adicione em **URIs de redirect autorizados**:
    ```
-   https://investimentos.solarzmkt.com.br/oauth/callback
+   https://solarz-eventos.yeixie.easypanel.host/oauth/callback
    ```
 
 ---
 
 ## Configuração do Supabase
 
-No dashboard do Supabase, adicione `investimentos.solarzmkt.com.br` em:
+No dashboard do Supabase, adicione `solarz-eventos.yeixie.easypanel.host` em:
 - **Authentication > URL Configuration > Site URL**
 - **Authentication > URL Configuration > Redirect URLs**
 
@@ -381,7 +381,7 @@ certbot renew --dry-run
 ### CORS errors
 Verifique se `ALLOWED_ORIGINS` no .env do backend inclui:
 ```
-https://investimentos.solarzmkt.com.br
+https://solarz-eventos.yeixie.easypanel.host
 ```
 Depois: `systemctl restart solarz-backend`
 
@@ -412,5 +412,5 @@ Depois: `systemctl restart solarz-backend`
 ## Pronto!
 
 Acesse:
-- **Frontend**: https://investimentos.solarzmkt.com.br
-- **Backend API**: https://investimentos.solarzmkt.com.br/api/docs
+- **Frontend**: https://solarz-eventos.yeixie.easypanel.host
+- **Backend API**: https://solarz-eventos.yeixie.easypanel.host/api/docs
