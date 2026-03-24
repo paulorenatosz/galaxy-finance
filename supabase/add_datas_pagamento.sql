@@ -14,3 +14,9 @@ END $$;
 
 -- Comentário
 COMMENT ON COLUMN investimentos.datas_pagamento IS 'Array de datas de pagamento para cada parcela (formato: YYYY-MM-DD)';
+
+-- Adicionar coluna responsavel_avatar
+ALTER TABLE investimentos
+ADD COLUMN IF NOT EXISTS responsavel_avatar TEXT DEFAULT '';
+
+COMMENT ON COLUMN investimentos.responsavel_avatar IS 'URL do avatar do responsável pelo investimento';
