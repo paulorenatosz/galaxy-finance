@@ -41,6 +41,10 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/oauth/callback")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+# Server config
+SERVER_HOST = os.getenv("HOST", "0.0.0.0")
+SERVER_PORT = int(os.getenv("PORT", "8000"))
+
 # Scopes para Calendar, Sheets, Drive e Gmail
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",
@@ -1011,7 +1015,7 @@ async def create_invite(request: Request):
         # Tentar enviar email (se configurado)
         try:
             email_res = requests.post(
-                f"http://localhost:8000/email/enviar",
+                f"http://127.0.0.1:{SERVER_PORT}/email/enviar",
                 json=email_data,
                 timeout=5
             )
