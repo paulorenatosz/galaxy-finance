@@ -17,5 +17,5 @@ COPY backend/ .
 # Expor porta
 EXPOSE 8000
 
-# Comando para rodar
+# Rodar (variáveis de ambiente passadas no docker run ou Easypanel)
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
