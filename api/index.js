@@ -1,5 +1,3 @@
-const { createServer } = require('node:http');
-const { parse } = require('node:url');
 const express = require('express');
 const cors = require('cors');
 const supabaseRoute = require('./routes/supabase');
@@ -16,7 +14,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Rotas (sem /api pois Vercel já roteia /api/* para aqui)
+// Middleware para remover prefixo /api
+app.use((req, res, next) => {
+  req.url = req.url.replace(/^\/api/, '') || '/';
+  next();
+});
+
+// Rotas
 app.use('/supabase', supabaseRoute);
 app.use('/google', googleRoute);
 app.use('/slack', slackRoute);
