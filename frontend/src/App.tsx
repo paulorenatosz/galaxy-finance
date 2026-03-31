@@ -22,14 +22,57 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Handle OAuth callback from Supabase
+    const handleCallback = async () => {
+      const hash = window.location.hash
+
+      // Check for OAuth callback with access token in hash
+      if (hash && hash.includes('access_token')) {
+        // Clear hash and reload to let SDK process
+        setTimeout(() => {
+          window.location.hash = ''
+        }, 100)
+      }
+    }
+
+    // Run callback handler
+    handleCallback()
+
+    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
       setLoading(false)
+
+      // After login, if there's a validated invite code, link it to the user's email
+      if (session?.user && _event === 'SIGNED_IN') {
+        const codigo = localStorage.getItem('convite_codigo')
+        if (codigo) {
+          try {
+            await fetch(
+              `${import.meta.env.VITE_API_URL}/api/convites/usar`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  codigo,
+                  email: session.user.email
+                })
+              }
+            )
+            // Clear the code from localStorage after use
+            localStorage.removeItem('convite_codigo')
+            localStorage.removeItem('convite_validado')
+          } catch (err) {
+            console.error('Erro ao vincular convite:', err)
+          }
+        }
+      }
     })
 
     return () => subscription.unsubscribe()

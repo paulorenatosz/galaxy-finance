@@ -6,6 +6,9 @@ node_modules/
 # Build
 dist/
 build/
+frontend/dist/
+frontend/.vite/
+frontend/node_modules/
 
 # Environment
 .env
@@ -45,3 +48,13 @@ google_tokens.json
 
 .vercel
 .mcp.json
+
+# Temp files
+supabase/.temp/
+test.json
+*.tmp
+*.temp
+
+# Upload scripts
+ssh_check.*
+upload_dist.py

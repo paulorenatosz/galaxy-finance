@@ -3,7 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd frontend && npm install && npm run build"
+    "build": "cd frontend && npm install && npm run build",
+    "dev": "cd frontend && npm run dev",
+    "install:all": "cd frontend && npm install"
+  },
+  "dependencies": {
+    "@slack/web-api": "^7.3.4",
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "express": "^4.21.1"
   },
   "devDependencies": {}
 }
