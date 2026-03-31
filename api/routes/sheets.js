@@ -122,4 +122,4 @@ router.post('/criar', async (req, res) => {
   router.handle(req, res);
 });
 
-module.exports = { router, setGoogleTokens };
+module.exports = router;

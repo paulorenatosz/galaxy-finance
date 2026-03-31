@@ -168,4 +168,4 @@ router.post('/upload-boleto', async (req, res) => {
   }
 });
 
-module.exports = { router, setGoogleTokens };
+module.exports = router;

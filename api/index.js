@@ -1,3 +1,5 @@
+const { createServer } = require('node:http');
+const { parse } = require('node:url');
 const express = require('express');
 const cors = require('cors');
 const supabaseRoute = require('./routes/supabase');
@@ -32,5 +34,4 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy' });
 });
 
-// Export for Vercel
 module.exports = app;
