@@ -14,21 +14,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Middleware para remover prefixo /api
-app.use((req, res, next) => {
-  req.url = req.url.replace(/^\/api/, '') || '/';
-  next();
-});
-
-// Rotas
-app.use('/supabase', supabaseRoute);
-app.use('/google', googleRoute);
-app.use('/slack', slackRoute);
-app.use('/sheets', sheetsRoute);
-app.use('/drive', driveRoute);
-app.use('/users', usersRoute);
-app.use('/convites', convitesRoute);
-
 // Health check
 app.get('/api', (req, res) => {
   res.json({ message: 'SolarZ Finance API', version: '2.0.0', status: 'ok' });
@@ -37,5 +22,14 @@ app.get('/api', (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy' });
 });
+
+// Rotas com /api prefix
+app.use('/api/supabase', supabaseRoute);
+app.use('/api/google', googleRoute);
+app.use('/api/slack', slackRoute);
+app.use('/api/sheets', sheetsRoute);
+app.use('/api/drive', driveRoute);
+app.use('/api/users', usersRoute);
+app.use('/api/convites', convitesRoute);
 
 module.exports = app;
