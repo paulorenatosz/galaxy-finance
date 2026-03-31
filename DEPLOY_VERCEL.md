@@ -32,16 +32,16 @@ No dashboard da Vercel, configure as seguintes variáveis:
 
 | Nome | Valor |
 |------|-------|
-| `SUPABASE_URL` | `https://udsnfatqoedogawpkgkc.supabase.co` |
-| `SUPABASE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` |
-| `SLACK_BOT_TOKEN` | `xoxb-731796675713-...` |
+| `SUPABASE_URL` | `https://seu-projeto.supabase.co` |
+| `SUPABASE_KEY` | `sua-supabase-anon-key` |
+| `SLACK_BOT_TOKEN` | `xoxb-xxx` |
 | `SLACK_CHANNEL` | `C0ALVLE6ZB7` |
-| `GOOGLE_CLIENT_ID` | `1016016925552-kblu78ne686jj7g9srrdkqt49dsdnfoa.apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET` | `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` |
+| `GOOGLE_CLIENT_ID` | `xxx.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | `xxx` |
 | `GOOGLE_REDIRECT_URI` | `https://SEU_DOMINIO.vercel.app/api/google/oauth/callback` |
-| `GOOGLE_DRIVE_PASTA_ID` | `1hdT3TSn4FjlyrUg75LNoYG1GsrLiXpPV` |
-| `GOOGLE_DRIVE_BOLETOS_ID` | `1jgGeKq512GqaCsvlj_IvZ8YZxjOWIS61` |
-| `GOOGLE_SHEET_ID` | `2083282215` |
+| `GOOGLE_DRIVE_PASTA_ID` | `xxx` |
+| `GOOGLE_DRIVE_BOLETOS_ID` | `xxx` |
+| `GOOGLE_SHEET_ID` | `xxx` |
 | `FRONTEND_URL` | `https://SEU_DOMINIO.vercel.app` |
 | `ADMIN_KEY` | `sua-chave-admin-segura` |
 
@@ -107,8 +107,8 @@ No dashboard do Supabase:
 Crie o arquivo `frontend/.env.production`:
 
 ```env
-VITE_SUPABASE_URL=https://udsnfatqoedogawpkgkc.supabase.co
-VITE_SUPABASE_ANON_KEY=seu-anon-key
+VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+VITE_SUPABASE_ANON_KEY=sua-anon-key
 VITE_GOOGLE_CLIENT_ID=seu-client-id
 VITE_API_URL=https://SEU_DOMINIO.vercel.app
 ```

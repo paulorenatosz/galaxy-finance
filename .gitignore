@@ -58,3 +58,5 @@ test.json
 # Upload scripts
 ssh_check.*
 upload_dist.py
+backend/.env
+backend/google_tokens.json
