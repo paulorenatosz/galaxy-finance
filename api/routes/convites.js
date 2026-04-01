@@ -45,7 +45,11 @@ router.post('/gerar', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao criar convite:', error.response?.data || error.message);
-    res.status(500).json({ error: error.message });
+    const msg = error.response?.data?.message || error.message;
+    if (msg.includes('does not exist') || msg.includes('convites')) {
+      return res.status(500).json({ error: 'Tabela convites não existe. Crie no Supabase Dashboard → SQL Editor.' });
+    }
+    res.status(500).json({ error: msg });
   }
 });
 
