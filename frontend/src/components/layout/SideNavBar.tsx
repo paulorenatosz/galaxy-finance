@@ -10,6 +10,7 @@ export default function SideNavBar({ onLogout }: SideNavBarProps) {
 
   const menuItems = [
     { id: 'dashboard', label: 'Visão Geral', icon: 'dashboard', path: '/' },
+    { id: 'usuarios', label: 'Controle de Acessos', icon: 'group', path: '/usuarios' },
     { id: 'importar', label: 'Importar Lote', icon: 'upload_file', path: '/importacao' },
     { id: 'cadastros', label: 'Gerenciar Cadastros', icon: 'receipt_long', path: '/cadastros' },
     { id: 'integracoes', label: 'Conectar Apps', icon: 'hub', path: '/integracoes' },
