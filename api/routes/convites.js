@@ -134,18 +134,28 @@ router.post('/usar', async (req, res) => {
 });
 
 // GET /api/convites/listar?admin_key=xxx
-router.get('/listar', (req, res) => {
+router.get('/listar', async (req, res) => {
   const { admin_key } = req.query || {};
 
   if (admin_key !== ADMIN_KEY) {
     return res.status(401).json({ error: 'Chave admin inválida' });
   }
 
-  res.json({ convites });
+  try {
+    const response = await axios.get(
+      `${SUPABASE_URL}/rest/v1/convites?order=criado_em.desc`,
+      { headers: supabaseHeaders }
+    );
+
+    res.json({ convites: response.data });
+  } catch (error) {
+    console.error('Erro ao listar convites:', error.response?.data || error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // DELETE /api/convites/:codigo?admin_key=xxx
-router.delete('/:codigo', (req, res) => {
+router.delete('/:codigo', async (req, res) => {
   const { admin_key } = req.query || {};
   const { codigo } = req.params;
 
