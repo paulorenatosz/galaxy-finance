@@ -23,6 +23,14 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy' });
 });
 
+// Handler de CORS preflight para todas as rotas API
+app.options('/api/:resource/:action(*)?', (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.sendStatus(200);
+});
+
 // Rotas com /api prefix
 app.use('/api/supabase', supabaseRoute);
 app.use('/api/google', googleRoute);
