@@ -352,6 +352,30 @@ export default function Dashboard({ session }: DashboardProps) {
     fetchInvestimentos()
   }
 
+  const handleDeleteInvestimento = async (id: string) => {
+    const adminKey = prompt('Acesso Restrito: Digite a senha Admin para excluir')
+    if (!adminKey) return
+
+    try {
+      // Usar a mesma rota de validacao de convites para confirmar a senha
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/convites/listar?admin_key=${adminKey}`)
+      if (!res.ok) {
+        alert('Senha de administrador incorreta!')
+        return
+      }
+
+      if (!confirm('Tem CERTEZA absoluta que deseja excluir este investimento permanentemente?')) return
+
+      const { error } = await supabase.from('investimentos').delete().eq('id', id)
+      if (error) throw error
+
+      setInvestimentos(investimentos.filter(i => i.id !== id))
+    } catch (err) {
+      console.error('Erro ao excluir:', err)
+      alert('Erro ao excluir investimento')
+    }
+  }
+
   const handleDeleteFuncionario = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este funcionário?')) return
     try {
@@ -754,9 +778,14 @@ export default function Dashboard({ session }: DashboardProps) {
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <button onClick={() => handleEdit(investimento)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all" title="Editar">
-                              <Edit2 size={14} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => handleEdit(investimento)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all" title="Editar">
+                                <Edit2 size={14} />
+                              </button>
+                              <button onClick={() => handleDeleteInvestimento(investimento.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all" title="Excluir">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )

@@ -81,7 +81,7 @@ const MESES = [
   { value: 'DEZ_26', label: 'Dezembro/2026' },
 ]
 
-const RESPONSAVEIS = ['Paulo Renato', 'Robson Conceição', 'Cintia']
+const RESPONSAVEIS_PADRAO = ['Paulo Renato', 'Robson Conceição', 'Cintia']
 
 const SUBCATEGORIAS: Record<string, string[]> = {
   'ESPAÇO E INFRAESTRUTURA': ['Espaço', 'Móveis', 'Equipamentos'],
@@ -194,8 +194,12 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [users, setUsers] = useState<any[]>([])
   const isEditing = !!investimento
   const [parcelas, setParcelas] = useState<string[]>([])
+
+  const userName = session.user.user_metadata?.name || session.user.email || ''
+  const responsaveisDinamicos = Array.from(new Set([...RESPONSAVEIS_PADRAO, userName])).filter(r => r && r.trim() !== '')
 
   // Adicionar parcela
   const addParcela = () => {
@@ -241,6 +245,11 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
         setFornecedores(fornecedoresData)
         setFornecedoresFiltrados(fornecedoresData)
       }
+
+      const { data: profilesData } = await supabase
+        .from('perfiles')
+        .select('nome, avatar_url')
+      if (profilesData) setUsers(profilesData)
     }
     fetchData()
   }, [])
@@ -352,7 +361,7 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
         categoria_detalhe: formData.categoria_detalhe,
         subcategoria: formData.subcategoria,
         responsavel: formData.responsavel,
-        responsavel_avatar: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || '',
+        responsavel_avatar: users.find(u => u.nome === formData.responsavel)?.avatar_url || (formData.responsavel === userName ? (session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture) : ''),
         mes_referencia: formData.mes_referencia,
         observacoes: formData.observacoes,
         status: formData.status,
@@ -725,16 +734,19 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
               <div className="space-y-4">
                 <div className="form-group">
                   <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Responsável *</label>
-                  <select
+                  <input
+                    type="text"
                     name="responsavel"
+                    list="responsaveis-lista"
                     value={formData.responsavel}
                     onChange={handleChange}
                     required
+                    placeholder="Digite ou selecione um responsável..."
                     className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  >
-                    <option value="">Selecione...</option>
-                    {RESPONSAVEIS.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                  />
+                  <datalist id="responsaveis-lista">
+                    {responsaveisDinamicos.map(r => <option key={r} value={r} />)}
+                  </datalist>
                 </div>
 
                 <div className="form-group">
