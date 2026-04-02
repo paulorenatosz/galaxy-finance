@@ -1,3 +1,4 @@
+// SolarZ Finance API - Redeploy to apply environment variables
 const express = require('express');
 const cors = require('cors');
 const supabaseRoute = require('./routes/supabase');
