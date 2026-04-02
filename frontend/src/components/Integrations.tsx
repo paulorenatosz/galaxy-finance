@@ -9,7 +9,7 @@ import {
   Mail, HardDrive, MessageSquare, Unlink, CheckCircle
 } from 'lucide-react'
 
-const BACKEND_URL = import.meta.env.VITE_API_URL || '/api'
+const BACKEND_URL = (import.meta.env.VITE_API_URL || '') + '/api'
 
 interface IntegrationsProps {
   session: Session
