@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Session } from '@supabase/supabase-js'
 import { supabase } from '../App'
 import TopNavBar from './layout/TopNavBar'
-import { Check, Save, Search } from 'lucide-react'
+import { Check, Save, Search, Upload, FileText, FolderOpen, ExternalLink, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 interface Fornecedor {
   id: string
@@ -198,6 +198,16 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
   const isEditing = !!investimento
   const [parcelas, setParcelas] = useState<string[]>([])
 
+  // Upload to Drive states
+  const [uploadingNF, setUploadingNF] = useState(false)
+  const [uploadingORC, setUploadingORC] = useState(false)
+  const [uploadResultNF, setUploadResultNF] = useState<{ status: string; fileName?: string; webViewLink?: string; caminho?: string; error?: string } | null>(null)
+  const [uploadResultORC, setUploadResultORC] = useState<{ status: string; fileName?: string; webViewLink?: string; caminho?: string; error?: string } | null>(null)
+  const [driveConnected, setDriveConnected] = useState<boolean | null>(null)
+  const [eventoPastas, setEventoPastas] = useState<{ id: string; name: string }[]>([])
+  const [eventoPastaSelecionada, setEventoPastaSelecionada] = useState('')
+  const [buscandoPasta, setBuscandoPasta] = useState(false)
+
   const userName = session.user.user_metadata?.name || session.user.email || ''
   const responsaveisDinamicos = Array.from(new Set([...RESPONSAVEIS_PADRAO, userName])).filter(r => r && r.trim() !== '')
 
@@ -250,6 +260,13 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
         .from('perfiles')
         .select('nome, avatar_url')
       if (profilesData) setUsers(profilesData)
+
+      // Verificar conexão com Drive
+      try {
+        const driveRes = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/drive/status`)
+        const driveData = await driveRes.json()
+        setDriveConnected(driveData.connected)
+      } catch { setDriveConnected(false) }
     }
     fetchData()
   }, [])
@@ -336,6 +353,103 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
     }))
     setShowFornecedorDropdown(false)
     setFornecedorBusca('')
+  }
+
+  // Buscar pasta do evento no Drive pelo nome
+  const buscarPastaEvento = async () => {
+    const eventoSelecionado = eventos.find(e => e.id === formData.evento_id)
+    if (!eventoSelecionado) return
+
+    setBuscandoPasta(true)
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/drive/buscar-pasta-evento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome_evento: eventoSelecionado.nome })
+      })
+      const data = await res.json()
+      if (data.encontrada) {
+        setEventoPastaSelecionada(data.pasta.id)
+        setEventoPastas([data.pasta])
+      } else {
+        setEventoPastas(data.sugestoes || [])
+        setEventoPastaSelecionada('')
+      }
+    } catch (err) {
+      console.error('Erro ao buscar pasta:', err)
+    } finally {
+      setBuscandoPasta(false)
+    }
+  }
+
+  // Listar todas as pastas de evento disponíveis
+  const listarPastasEvento = async () => {
+    setBuscandoPasta(true)
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/drive/listar-pastas-evento`)
+      const data = await res.json()
+      setEventoPastas(data.pastas || [])
+    } catch (err) {
+      console.error('Erro ao listar pastas:', err)
+    } finally {
+      setBuscandoPasta(false)
+    }
+  }
+
+  // Upload de arquivo para o Drive
+  const handleFileUpload = async (tipoDocumento: 'NF' | 'ORCAMENTO', file: File) => {
+    if (!eventoPastaSelecionada) {
+      alert('Selecione a pasta do evento no Drive primeiro')
+      return
+    }
+
+    const setUploading = tipoDocumento === 'NF' ? setUploadingNF : setUploadingORC
+    const setResult = tipoDocumento === 'NF' ? setUploadResultNF : setUploadResultORC
+
+    setUploading(true)
+    setResult(null)
+
+    try {
+      // Ler arquivo como base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const result = reader.result as string
+          resolve(result.split(',')[1]) // Remove prefix data:...
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/drive/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file: base64,
+          file_name: file.name,
+          tipo_documento: tipoDocumento,
+          evento_pasta_id: eventoPastaSelecionada,
+          nome_fornecedor: formData.nome_fornecedor,
+          data_vencimento: formData.data_vencimento,
+          numero_nota_fiscal: formData.numero_nota_fiscal,
+          valor: formData.valor_realizado || formData.valor_orcado
+        })
+      })
+
+      const data = await res.json()
+      if (res.ok) {
+        setResult({ status: 'ok', fileName: data.fileName, webViewLink: data.webViewLink, caminho: data.caminho })
+        if (tipoDocumento === 'NF') {
+          setFormData(prev => ({ ...prev, possui_boleto_nf: 'true' }))
+        }
+      } else {
+        setResult({ status: 'error', error: data.error || 'Erro no upload' })
+      }
+    } catch (err: any) {
+      setResult({ status: 'error', error: err.message || 'Erro de conexão' })
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -721,6 +835,191 @@ export default function InvestmentForm({ session, onClose, investimento }: Inves
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Card: Upload para Google Drive - FULL WIDTH */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">cloud_upload</span>
+                <h3 className="font-semibold text-gray-800 dark:text-white">Upload para Google Drive</h3>
+              </div>
+              {driveConnected === true && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-xs font-medium rounded-full">
+                  <CheckCircle2 size={12} /> Conectado
+                </span>
+              )}
+              {driveConnected === false && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400 text-xs font-medium rounded-full">
+                  <AlertCircle size={12} /> Desconectado
+                </span>
+              )}
+            </div>
+
+            {driveConnected === false ? (
+              <div className="text-center py-6 bg-slate-50 dark:bg-slate-700/30 rounded-xl">
+                <FolderOpen size={40} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">Conecte o Google Drive na página de Integrações para enviar arquivos.</p>
+                <a href="/integracoes" className="text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline">Ir para Integrações →</a>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Seleção de pasta do evento */}
+                <div className="form-group">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Pasta do Evento no Drive</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={eventoPastaSelecionada}
+                      onChange={(e) => setEventoPastaSelecionada(e.target.value)}
+                      className="flex-1 px-3 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm"
+                    >
+                      <option value="">Selecione a pasta do evento...</option>
+                      {eventoPastas.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={buscarPastaEvento}
+                      disabled={!formData.evento_id || buscandoPasta}
+                      className="px-3 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="Buscar automaticamente"
+                    >
+                      <Search size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={listarPastasEvento}
+                      disabled={buscandoPasta}
+                      className="px-3 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-40"
+                      title="Listar todas as pastas"
+                    >
+                      <FolderOpen size={18} />
+                    </button>
+                  </div>
+                  {buscandoPasta && (
+                    <p className="text-xs text-blue-500 mt-1 animate-pulse">Buscando pastas no Drive...</p>
+                  )}
+                  <p className="text-xs text-slate-400 mt-1">🔍 Use a lupa para buscar pelo nome do evento, ou a pasta para listar todas.</p>
+                </div>
+
+                {/* Upload NF e Orçamento - Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Upload NF */}
+                  <div className={`p-4 rounded-xl border-2 border-dashed transition-all ${
+                    uploadResultNF?.status === 'ok' ? 'border-emerald-300 bg-emerald-50/50 dark:bg-emerald-900/10' :
+                    uploadingNF ? 'border-blue-300 bg-blue-50/50 dark:bg-blue-900/10' :
+                    'border-slate-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-500'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileText size={18} className="text-red-500" />
+                      <span className="text-sm font-semibold text-gray-800 dark:text-white">Nota Fiscal</span>
+                    </div>
+
+                    {uploadResultNF?.status === 'ok' ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 size={16} />
+                          <span className="text-xs font-medium">Enviado com sucesso!</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate" title={uploadResultNF.caminho}>{uploadResultNF.caminho}</p>
+                        <a href={uploadResultNF.webViewLink} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                          <ExternalLink size={12} /> Ver arquivo
+                        </a>
+                      </div>
+                    ) : uploadResultNF?.status === 'error' ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-red-500">
+                          <AlertCircle size={16} />
+                          <span className="text-xs font-medium">Erro: {uploadResultNF.error}</span>
+                        </div>
+                        <label className="block">
+                          <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => { if (e.target.files?.[0]) handleFileUpload('NF', e.target.files[0]) }} />
+                          <span className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">Tentar novamente</span>
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center gap-2 cursor-pointer py-2">
+                        <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" disabled={uploadingNF || !eventoPastaSelecionada}
+                          onChange={(e) => { if (e.target.files?.[0]) handleFileUpload('NF', e.target.files[0]) }} />
+                        {uploadingNF ? (
+                          <div className="flex items-center gap-2 text-blue-500">
+                            <span className="material-symbols-outlined animate-spin text-lg">sync</span>
+                            <span className="text-xs">Enviando...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload size={24} className={`${eventoPastaSelecionada ? 'text-slate-400 dark:text-slate-500' : 'text-slate-200 dark:text-slate-700'}`} />
+                            <span className={`text-xs ${eventoPastaSelecionada ? 'text-slate-500 dark:text-slate-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                              {eventoPastaSelecionada ? 'Clique para enviar NF' : 'Selecione a pasta primeiro'}
+                            </span>
+                          </>
+                        )}
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Upload Orçamento */}
+                  <div className={`p-4 rounded-xl border-2 border-dashed transition-all ${
+                    uploadResultORC?.status === 'ok' ? 'border-emerald-300 bg-emerald-50/50 dark:bg-emerald-900/10' :
+                    uploadingORC ? 'border-blue-300 bg-blue-50/50 dark:bg-blue-900/10' :
+                    'border-slate-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-500'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileText size={18} className="text-amber-500" />
+                      <span className="text-sm font-semibold text-gray-800 dark:text-white">Orçamento</span>
+                    </div>
+
+                    {uploadResultORC?.status === 'ok' ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 size={16} />
+                          <span className="text-xs font-medium">Enviado com sucesso!</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate" title={uploadResultORC.caminho}>{uploadResultORC.caminho}</p>
+                        <a href={uploadResultORC.webViewLink} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                          <ExternalLink size={12} /> Ver arquivo
+                        </a>
+                      </div>
+                    ) : uploadResultORC?.status === 'error' ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-red-500">
+                          <AlertCircle size={16} />
+                          <span className="text-xs font-medium">Erro: {uploadResultORC.error}</span>
+                        </div>
+                        <label className="block">
+                          <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => { if (e.target.files?.[0]) handleFileUpload('ORCAMENTO', e.target.files[0]) }} />
+                          <span className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">Tentar novamente</span>
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center gap-2 cursor-pointer py-2">
+                        <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx" disabled={uploadingORC || !eventoPastaSelecionada}
+                          onChange={(e) => { if (e.target.files?.[0]) handleFileUpload('ORCAMENTO', e.target.files[0]) }} />
+                        {uploadingORC ? (
+                          <div className="flex items-center gap-2 text-blue-500">
+                            <span className="material-symbols-outlined animate-spin text-lg">sync</span>
+                            <span className="text-xs">Enviando...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload size={24} className={`${eventoPastaSelecionada ? 'text-slate-400 dark:text-slate-500' : 'text-slate-200 dark:text-slate-700'}`} />
+                            <span className={`text-xs ${eventoPastaSelecionada ? 'text-slate-500 dark:text-slate-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                              {eventoPastaSelecionada ? 'Clique para enviar Orçamento' : 'Selecione a pasta primeiro'}
+                            </span>
+                          </>
+                        )}
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed">
+                  📄 Nomenclatura automática: <strong>NF_FORNECEDOR_DD_MM_AAAA_NumeroNF.ext</strong> ou <strong>ORC_FORNECEDOR_DD_MM_AAAA_R$Valor.ext</strong><br/>
+                  📁 Destino: Pasta do Evento → OG | ORGANIZAÇÃO → NF ou OR | ORÇAMENTOS
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Card: Responsabilidades & Observações - 2 columns */}
