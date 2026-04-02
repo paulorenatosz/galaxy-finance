@@ -5,8 +5,6 @@ const { URLSearchParams } = require('url');
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/google/oauth/callback';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -15,7 +13,7 @@ const supabaseHeaders = {
   'apikey': SUPABASE_KEY,
   'Authorization': `Bearer ${SUPABASE_KEY}`,
   'Content-Type': 'application/json',
-  'Prefer': 'return=representation'
+  'Prefer': 'return=minimal' // Minimal is safer for upserts if you don't need the result
 };
 
 const SCOPES = [
@@ -26,49 +24,63 @@ const SCOPES = [
   'https://www.googleapis.com/auth/drive'
 ];
 
+// Helper para detectar URLs dinamicamente se as envs não estiverem lá
+function getUrls(req) {
+  const protocol = req.headers['x-forwarded-proto'] || 'http';
+  const host = req.headers.host;
+  const baseUrl = `${protocol}://${host}`;
+  
+  // API redirect: base + /api/google/oauth/callback
+  // Frontend: se estiver em topaz.vercel.app, o frontend é o mesmo base
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/api/google/oauth/callback`;
+  const frontendUrl = process.env.FRONTEND_URL || baseUrl;
+  
+  return { redirectUri, frontendUrl };
+}
+
 // ============================================
 // TOKEN PERSISTENCE VIA SUPABASE
 // ============================================
 
-// Cache em memória para não bater no Supabase toda request
 let cachedTokens = null;
 
 async function saveTokens(tokens) {
-  cachedTokens = tokens;
+  cachedTokens = {
+    ...cachedTokens,
+    ...tokens,
+    expiry_date: tokens.expiry_date || (Date.now() + (tokens.expires_in || 3600) * 1000)
+  };
+
   try {
-    // Upsert: insere ou atualiza
     const payload = {
       id: 'default',
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token || cachedTokens?.refresh_token || null,
-      expiry_date: tokens.expiry_date || (Date.now() + (tokens.expires_in || 3600) * 1000),
+      access_token: cachedTokens.access_token,
+      refresh_token: cachedTokens.refresh_token || null,
+      expiry_date: cachedTokens.expiry_date,
       updated_at: new Date().toISOString()
     };
 
-    // Tentar update primeiro
-    const updateRes = await axios.patch(
-      `${SUPABASE_URL}/rest/v1/google_tokens?id=eq.default`,
+    // Upsert usando POST com resolution=merge-duplicates (PostgREST style)
+    // Isso é mais atômico que PATCH + POST
+    await axios.post(
+      `${SUPABASE_URL}/rest/v1/google_tokens`,
       payload,
-      { headers: supabaseHeaders }
+      { 
+        headers: { 
+          ...supabaseHeaders, 
+          'Prefer': 'resolution=merge-duplicates,return=minimal' 
+        } 
+      }
     );
 
-    // Se não encontrou row para update, inserir
-    if (!updateRes.data || updateRes.data.length === 0) {
-      await axios.post(
-        `${SUPABASE_URL}/rest/v1/google_tokens`,
-        payload,
-        { headers: { ...supabaseHeaders, 'Prefer': 'return=representation,resolution=merge-duplicates' } }
-      );
-    }
-
-    console.log('[Google] Tokens salvos no Supabase com sucesso');
+    console.log('[Google] Tokens sincronizados no Supabase');
   } catch (err) {
-    console.error('[Google] Erro ao salvar tokens no Supabase:', err.message);
+    console.error('[Google] Erro ao salvar tokens:', err.response?.data || err.message);
+    throw err; // Repassar para o callback tratar
   }
 }
 
 async function loadTokens() {
-  // Se já tem em cache e não expirou, retorna
   if (cachedTokens?.access_token && cachedTokens.expiry_date && Date.now() < cachedTokens.expiry_date - 60000) {
     return cachedTokens;
   }
@@ -81,34 +93,24 @@ async function loadTokens() {
 
     if (res.data && res.data.length > 0) {
       cachedTokens = res.data[0];
-      console.log('[Google] Tokens carregados do Supabase');
-
-      // Se expirou, tentar renovar
-      if (cachedTokens.expiry_date && Date.now() >= cachedTokens.expiry_date - 60000) {
-        console.log('[Google] Token expirado, renovando...');
-        await refreshAccessToken();
-      }
-
       return cachedTokens;
     }
   } catch (err) {
-    console.error('[Google] Erro ao carregar tokens do Supabase:', err.message);
+    console.error('[Google] Erro ao carregar tokens:', err.response?.data || err.message);
   }
 
   return null;
 }
 
 async function refreshAccessToken() {
-  if (!cachedTokens?.refresh_token) {
-    console.error('[Google] Sem refresh_token para renovar');
-    return null;
-  }
+  const tokens = await loadTokens();
+  if (!tokens?.refresh_token) return null;
 
   try {
     const params = new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
       client_secret: GOOGLE_CLIENT_SECRET,
-      refresh_token: cachedTokens.refresh_token,
+      refresh_token: tokens.refresh_token,
       grant_type: 'refresh_token'
     });
 
@@ -119,13 +121,12 @@ async function refreshAccessToken() {
     );
 
     const newTokens = {
-      ...cachedTokens,
+      ...tokens,
       access_token: response.data.access_token,
       expiry_date: Date.now() + (response.data.expires_in || 3600) * 1000
     };
 
     await saveTokens(newTokens);
-    console.log('[Google] Token renovado com sucesso');
     return newTokens;
   } catch (err) {
     console.error('[Google] Erro ao renovar token:', err.response?.data || err.message);
@@ -133,12 +134,10 @@ async function refreshAccessToken() {
   }
 }
 
-// Função exportada para outros módulos usarem
 async function getValidTokens() {
   let tokens = await loadTokens();
   if (!tokens?.access_token) return null;
 
-  // Se expirou, renovar
   if (tokens.expiry_date && Date.now() >= tokens.expiry_date - 60000) {
     tokens = await refreshAccessToken();
   }
@@ -150,11 +149,11 @@ async function getValidTokens() {
 // ROTAS
 // ============================================
 
-// GET /api/google/authorize
 router.get('/authorize', (req, res) => {
+  const { redirectUri } = getUrls(req);
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: GOOGLE_REDIRECT_URI,
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: SCOPES.join(' '),
     access_type: 'offline',
@@ -163,12 +162,11 @@ router.get('/authorize', (req, res) => {
   res.redirect(`https://accounts.google.com/o/oauth2/auth?${params.toString()}`);
 });
 
-// GET /api/google/oauth/callback
 router.get('/oauth/callback', async (req, res) => {
   const { code } = req.query;
-  if (!code) {
-    return res.status(400).json({ error: 'Código não fornecido' });
-  }
+  const { redirectUri, frontendUrl } = getUrls(req);
+
+  if (!code) return res.redirect(`${frontendUrl}/integracoes?status=error&reason=no_code`);
 
   try {
     const params = new URLSearchParams({
@@ -176,7 +174,7 @@ router.get('/oauth/callback', async (req, res) => {
       client_secret: GOOGLE_CLIENT_SECRET,
       code,
       grant_type: 'authorization_code',
-      redirect_uri: GOOGLE_REDIRECT_URI
+      redirect_uri: redirectUri
     });
 
     const response = await axios.post(
@@ -186,23 +184,23 @@ router.get('/oauth/callback', async (req, res) => {
     );
 
     await saveTokens(response.data);
-    res.redirect(`${FRONTEND_URL}/integracoes?status=connected`);
+    res.redirect(`${frontendUrl}/integracoes?status=connected`);
   } catch (error) {
-    console.error('Erro no OAuth:', error.response?.data || error.message);
-    res.redirect(`${FRONTEND_URL}/integracoes?status=error`);
+    console.error('Erro no OAuth Callback:', error.response?.data || error.message);
+    res.redirect(`${frontendUrl}/integracoes?status=error&msg=${encodeURIComponent(error.message)}`);
   }
 });
 
-// GET /api/google/status
 router.get('/status', async (req, res) => {
   const tokens = await getValidTokens();
   if (tokens?.access_token) {
     return res.json({ connected: true });
   }
 
+  const { redirectUri } = getUrls(req);
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: GOOGLE_REDIRECT_URI,
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: SCOPES.join(' '),
     access_type: 'offline',
@@ -215,33 +213,20 @@ router.get('/status', async (req, res) => {
   });
 });
 
-// POST /api/google/revoke
 router.post('/revoke', async (req, res) => {
   const tokens = await loadTokens();
   if (tokens?.refresh_token) {
     try {
-      await axios.post(
-        'https://oauth2.googleapis.com/revoke',
-        new URLSearchParams({ token: tokens.refresh_token }).toString(),
-        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-      );
-    } catch (e) {
-      console.error('Erro ao revogar token:', e.message);
-    }
+      await axios.post('https://oauth2.googleapis.com/revoke', new URLSearchParams({ token: tokens.refresh_token }).toString());
+    } catch (e) {}
   }
 
-  // Limpar do Supabase
   try {
-    await axios.delete(
-      `${SUPABASE_URL}/rest/v1/google_tokens?id=eq.default`,
-      { headers: supabaseHeaders }
-    );
-  } catch (e) {
-    console.error('Erro ao limpar tokens do Supabase:', e.message);
-  }
+    await axios.delete(`${SUPABASE_URL}/rest/v1/google_tokens?id=eq.default`, { headers: supabaseHeaders });
+  } catch (e) {}
 
   cachedTokens = null;
-  res.json({ status: 'ok', message: 'Acesso Google revogado' });
+  res.json({ status: 'ok' });
 });
 
 module.exports = router;
