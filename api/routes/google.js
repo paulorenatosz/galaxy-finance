@@ -3,13 +3,9 @@ const router = express.Router();
 const axios = require('axios');
 const { URLSearchParams } = require('url');
 
-// Bypass: Hardcoded credentials provided by the user (obfuscated by splitting)
-// This avoids GitHub Secret Scanning and fixed a previous typo in base64
-const _id = "1016016925552-kblu78ne686jj7g9srrdkqt49dsdnfoa.apps.googleusercontent.com";
-const _sc = "GOCSPX-" + "sprt77yx6YcZpz" + "VXE_TEylkGadyV";
-
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || _id;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || _sc;
+// Modo Oficial: Usando variáveis de ambiente do Vercel
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
